@@ -51,9 +51,11 @@ static int parse_request_line(http_conn_t *c, char *hdr_block)
 
     if (strncmp(version, "HTTP/", 5) == 0) {
         if (sscanf(version + 5, "%d.%d", &c->req.http_major, &c->req.http_minor) != 2) {
+            HTTP_ERR(NULL, "Malformed HTTP version: %s", version);
             return HTTP_PARSE_BAD_REQUEST;
         }
     } else {
+        HTTP_ERR(NULL, "Unsupported request line version token: %s", version);
         return HTTP_PARSE_BAD_REQUEST;
     }
 
@@ -156,6 +158,7 @@ int parse_request(http_ctx_t *ctx, http_conn_t *c)
 
     int req_line_res = parse_request_line(c, hdr_block);
     if (req_line_res < 0) {
+        HTTP_ERR(ctx, "parse_request: request line parsing failed");
         if (req_line_res == HTTP_PARSE_BAD_REQUEST) {
             goto err_bad_request;
         }
@@ -163,6 +166,7 @@ int parse_request(http_ctx_t *ctx, http_conn_t *c)
     }
     if (parse_headers(ctx, c, hdr_block + strlen(hdr_block) + 2,
                       header_len - (strlen(hdr_block) + 2)) < 0) {
+        HTTP_ERR(ctx, "parse_request: header parsing failed");
         goto err_free_hdr;
     }
 
@@ -179,6 +183,7 @@ int parse_request(http_ctx_t *ctx, http_conn_t *c)
 
     int body_res = parse_body(ctx, c, body_start, len, header_len);
     if (body_res < 0) {
+        HTTP_ERR(ctx, "parse_request: body parsing failed");
         goto err_free_hdr;
     }
     if (body_res == 0) {

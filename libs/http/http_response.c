@@ -112,9 +112,12 @@ int prepare_response(http_ctx_t *ctx, http_conn_t *c)
 
     int n = snprintf(line, sizeof(line), "HTTP/1.1 %d %s\r\n", c->res.status_code, reason);
     if (n < 0 || (size_t)n >= sizeof(line)) {
+        HTTP_ERR(ctx, "failed to render status line for code=%d",
+                 c->res.status_code);
         return -1;
     }
     if (dynbuf_append(&c->wb, line, (size_t)n) < 0) {
+        HTTP_ERR(ctx, "failed to append status line");
         return -1;
     }
 
@@ -129,9 +132,11 @@ int prepare_response(http_ctx_t *ctx, http_conn_t *c)
         char buf[1024];
         int rn = snprintf(buf, sizeof(buf), "%s: %s\r\n", name, value);
         if (rn < 0 || (size_t)rn >= sizeof(buf)) {
+            HTTP_ERR(ctx, "failed to render header '%s'", name);
             return -1;
         }
         if (dynbuf_append(&c->wb, buf, (size_t)rn) < 0) {
+            HTTP_ERR(ctx, "failed to append header '%s'", name);
             return -1;
         }
         if (strcasecmp(name, "Content-Length") == 0 ||
@@ -151,9 +156,11 @@ int prepare_response(http_ctx_t *ctx, http_conn_t *c)
         char buf[64];
         int rn = snprintf(buf, sizeof(buf), "Content-Length: %zu\r\n", body_len);
         if (rn < 0 || (size_t)rn >= sizeof(buf)) {
+            HTTP_ERR(ctx, "failed to render Content-Length");
             return -1;
         }
         if (dynbuf_append(&c->wb, buf, (size_t)rn) < 0) {
+            HTTP_ERR(ctx, "failed to append Content-Length");
             return -1;
         }
     }
@@ -162,14 +169,17 @@ int prepare_response(http_ctx_t *ctx, http_conn_t *c)
         ? "Connection: keep-alive\r\n"
         : "Connection: close\r\n";
     if (dynbuf_append(&c->wb, conn_hdr, strlen(conn_hdr)) < 0) {
+        HTTP_ERR(ctx, "failed to append Connection header");
         return -1;
     }
     if (dynbuf_append(&c->wb, "\r\n", 2) < 0) {
+        HTTP_ERR(ctx, "failed to append header/body separator");
         return -1;
     }
 
     if (body_len > 0 && ri && ri->bodybuf.data) {
         if (dynbuf_append(&c->wb, ri->bodybuf.data, body_len) < 0) {
+            HTTP_ERR(ctx, "failed to append body len=%zu", body_len);
             return -1;
         }
     }
@@ -189,6 +199,7 @@ int prepare_response(http_ctx_t *ctx, http_conn_t *c)
 void http_response_init(http_response_t *res)
 {
     if (!res) {
+        HTTP_ERR(NULL, "response pointer is NULL");
         return;
     }
 
@@ -214,6 +225,7 @@ void http_response_init(http_response_t *res)
 
     http_response_internal_t *ri = malloc(sizeof(*ri));
     if (!ri) {
+        HTTP_ERR(NULL, "failed to allocate internal response state");
         return;
     }
     ri->conn = NULL;
@@ -231,38 +243,56 @@ void http_response_set_status(http_response_t *res, int status_code, const char 
 void http_response_add_header(http_response_t *res, const char *name, const char *value)
 {
     size_t n = res->num_resp_headers;
-    res->resp_headers = realloc(res->resp_headers, sizeof(*res->resp_headers) * (n + 1));
+    void *tmp = realloc(res->resp_headers, sizeof(*res->resp_headers) * (n + 1));
+    if (!tmp) {
+        HTTP_ERR(NULL, "realloc failed");
+        return;
+    }
+    res->resp_headers = tmp;
     res->resp_headers[n].name = strdup(name);
     res->resp_headers[n].value = strdup(value);
+    if (!res->resp_headers[n].name || !res->resp_headers[n].value) {
+        HTTP_ERR(NULL, "failed to copy header '%s'",
+                 name ? name : "<null>");
+    }
     res->num_resp_headers++;
 }
 
 int http_response_write_body(http_response_t *res, const void *data, size_t len)
 {
     if (!res) {
+        HTTP_ERR(NULL, "response pointer is NULL");
         return -1;
     }
     if (len == 0) {
         return 0;
     }
     if (!data) {
+        HTTP_ERR(NULL, "data is NULL while len=%zu", len);
         return -1;
     }
 
     http_response_internal_t *ri = (http_response_internal_t *)res->internal;
     if (!ri) {
+        HTTP_ERR(NULL, "internal response state is NULL");
         return -1;
     }
 
-    return dynbuf_append(&ri->bodybuf, data, len);
+    if (dynbuf_append(&ri->bodybuf, data, len) < 0) {
+        HTTP_ERR(NULL, "failed to append body len=%zu", len);
+        return -1;
+    }
+    return 0;
 }
 
 int http_response_end(http_response_t *res)
 {
     if (!res) {
+        HTTP_ERR(NULL, "response pointer is NULL");
         return -1;
     }
     if (!res->internal) {
+        HTTP_ERR(NULL, "internal response state is NULL");
         return 0;
     }
     return 0;

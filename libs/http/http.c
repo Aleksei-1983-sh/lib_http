@@ -66,26 +66,32 @@ static int set_nonblocking(int fd)
 {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags < 0) {
+        HTTP_ERR(NULL, "set_nonblocking: fcntl(F_GETFL) failed for fd=%d: %s",
+                 fd, strerror(errno));
         return -1;
     }
     if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+        HTTP_ERR(NULL, "set_nonblocking: fcntl(F_SETFL) failed for fd=%d: %s",
+                 fd, strerror(errno));
         return -1;
     }
     return 0;
 }
 
-static int create_and_bind(const char *address)
+static int create_and_bind(http_ctx_t *ctx, const char *address)
 {
     char host[256] = {0};
     char serv[16] = {0};
 
     const char *p = strchr(address, ':');
     if (!p) {
+        HTTP_ERR(ctx, "address '%s' must be in host:port format", address);
         return -1;
     }
 
     size_t hlen = (size_t)(p - address);
     if (hlen >= sizeof(host)) {
+        HTTP_ERR(ctx, "host part is too long in address '%s'", address);
         return -1;
     }
     if (hlen > 0) {
@@ -106,8 +112,8 @@ static int create_and_bind(const char *address)
 
     int err = getaddrinfo(hlen ? host : NULL, serv, &hints, &res);
     if (err) {
-        fprintf(stderr, "[ERROR] create_and_bind: getaddrinfo(%s, %s) failed: %s\n",
-                host[0] ? host : "<any>", serv, gai_strerror(err));
+        HTTP_ERR(ctx, "getaddrinfo(%s, %s) failed: %s",
+                 host[0] ? host : "<any>", serv, gai_strerror(err));
         return -1;
     }
 
@@ -120,16 +126,17 @@ static int create_and_bind(const char *address)
 
         int opt = 1;
         if (setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-            fprintf(stderr, "[WARN] create_and_bind: setsockopt SO_REUSEADDR failed: %s\n",
-                    strerror(errno));
+            HTTP_DBG(ctx, "setsockopt SO_REUSEADDR failed: %s",
+                     strerror(errno));
         }
 
         if (bind(listen_fd, rp->ai_addr, rp->ai_addrlen) == 0) {
+            HTTP_DBG(ctx, "bound %s successfully", address);
             break;
         }
 
-        fprintf(stderr, "[WARN] create_and_bind: bind(%s:%s) failed: %s\n",
-                host[0] ? host : "0.0.0.0", serv, strerror(errno));
+        HTTP_DBG(ctx, "bind(%s:%s) failed: %s",
+                 host[0] ? host : "0.0.0.0", serv, strerror(errno));
         close(listen_fd);
         listen_fd = -1;
     }
@@ -137,7 +144,7 @@ static int create_and_bind(const char *address)
     freeaddrinfo(res);
 
     if (listen_fd < 0) {
-        fprintf(stderr, "[ERROR] create_and_bind: unable to bind to %s\n", address);
+        HTTP_ERR(ctx, "unable to bind to %s", address);
         return -1;
     }
 
@@ -155,6 +162,7 @@ static void accept_new(http_ctx_t *ctx, int listen_fd)
         }
         return;
     }
+    HTTP_DBG(ctx, "accept_new: accepted fd=%d on listener=%d", fd, listen_fd);
 
     if (set_nonblocking(fd) < 0) {
         HTTP_ERR(ctx, "set_nonblocking(fd=%d) failed: %s", fd, strerror(errno));
@@ -162,6 +170,7 @@ static void accept_new(http_ctx_t *ctx, int listen_fd)
 
     http_conn_t *c = http_malloc(ctx, sizeof(*c));
     if (!c) {
+        HTTP_ERR(ctx, "accept_new: failed to allocate connection for fd=%d", fd);
         close(fd);
         return;
     }
@@ -182,6 +191,7 @@ static void accept_new(http_ctx_t *ctx, int listen_fd)
         if (pa) {
             snprintf(pa, len, "%s:%s", host, serv);
             c->req.peer_addr = pa;
+            HTTP_DBG(ctx, "accept_new: peer=%s", pa);
         }
     }
 
@@ -190,6 +200,7 @@ static void accept_new(http_ctx_t *ctx, int listen_fd)
 #ifdef HTTP_ENABLE_MONITORING
     ctx->metrics.active_connections++;
 #endif
+    HTTP_DBG(ctx, "accept_new: connection fd=%d added", fd);
 }
 
 static void close_conn(http_ctx_t *ctx, http_conn_t *c_prev, http_conn_t *c)
@@ -213,31 +224,38 @@ static void close_conn(http_ctx_t *ctx, http_conn_t *c_prev, http_conn_t *c)
 #ifdef HTTP_ENABLE_MONITORING
     ctx->metrics.active_connections--;
 #endif
+    HTTP_DBG(ctx, "close_conn: closing fd=%d", c->fd);
     http_free_mem(ctx, c);
 }
 
-static void print_request(const http_request_t *req)
+static void print_request(http_ctx_t *ctx, const http_request_t *req)
 {
+    (void)ctx;
     if (!req) {
         return;
     }
 
-    printf("=== HTTP Request ===\n");
-    printf("Method: %s\n", req->method ? req->method : "<none>");
-    printf("URI Path: %s\n", req->uri_path ? req->uri_path : "<none>");
-    printf("Query: %s\n", req->uri_query ? req->uri_query : "<none>");
-    printf("HTTP Version: %d.%d\n", req->http_major, req->http_minor);
-    printf("Peer Address: %s\n", req->peer_addr ? req->peer_addr : "<unknown>");
-    printf("\n-- Headers (%zu) --\n", req->num_headers);
+    HTTP_DBG(ctx, "request: method=%s path=%s query=%s http=%d.%d peer=%s",
+             req->method ? req->method : "<none>",
+             req->uri_path ? req->uri_path : "<none>",
+             req->uri_query ? req->uri_query : "<none>",
+             req->http_major,
+             req->http_minor,
+             req->peer_addr ? req->peer_addr : "<unknown>");
+    HTTP_DBG(ctx, "request: headers=%zu body_len=%zu", req->num_headers, req->body_len);
     for (size_t i = 0; i < req->num_headers; ++i) {
-        printf("%s: %s\n", req->headers[i].name, req->headers[i].value);
+        HTTP_DBG(ctx, "request header[%zu]: %s: %s",
+                 i, req->headers[i].name, req->headers[i].value);
     }
-    printf("\n-- Body (length: %zu) --\n", req->body_len);
     if (req->body && req->body_len > 0) {
-        fwrite(req->body, 1, req->body_len, stdout);
-        printf("\n");
+        size_t preview_len = req->body_len > 256 ? 256 : req->body_len;
+        char preview[257];
+        memcpy(preview, req->body, preview_len);
+        preview[preview_len] = '\0';
+        HTTP_DBG(ctx, "request body preview: \"%s\"%s",
+                 preview, req->body_len > preview_len ? "..." : "");
     } else {
-        printf("<empty>\n");
+        HTTP_DBG(ctx, "request body: <empty>");
     }
 }
 
@@ -258,10 +276,17 @@ static int queue_error_response(http_ctx_t *ctx, http_conn_t *c, int status, con
     http_response_add_header(&c->res, "Content-Type", "text/plain");
     if (body) {
         if (http_response_write_body(&c->res, body, strlen(body)) < 0) {
+            HTTP_ERR(ctx, "queue_error_response: failed to write error body status=%d fd=%d",
+                     status, c ? c->fd : -1);
             return -1;
         }
     }
-    return prepare_response(ctx, c);
+    if (prepare_response(ctx, c) < 0) {
+        HTTP_ERR(ctx, "queue_error_response: prepare_response failed status=%d fd=%d",
+                 status, c ? c->fd : -1);
+        return -1;
+    }
+    return 0;
 }
 
 static int handle_conn(http_ctx_t *ctx, http_conn_t *c)
@@ -282,22 +307,27 @@ static int handle_conn(http_ctx_t *ctx, http_conn_t *c)
             return -1;
         }
         if (n == 0) {
+            HTTP_DBG(ctx, "handle_conn: peer closed connection fd=%d", c->fd);
             return -1;
         }
 
         if (dynbuf_append(&c->rb, buf, (size_t)n) < 0) {
+            HTTP_ERR(ctx, "handle_conn: failed to append %zd bytes to read buffer fd=%d",
+                     n, c->fd);
             return -1;
         }
 
         int pr = parse_request(ctx, c);
         if (pr == HTTP_PARSE_BAD_REQUEST) {
+            HTTP_DBG(ctx, "handle_conn: malformed request on fd=%d", c->fd);
             return queue_error_response(ctx, c, 400, "Bad Request", "Bad Request");
         }
         if (pr < 0) {
+            HTTP_ERR(ctx, "handle_conn: parse_request failed on fd=%d", c->fd);
             return -1;
         }
         if (pr == HTTP_PARSE_OK) {
-            print_request(&c->req);
+            print_request(ctx, &c->req);
 #ifdef HTTP_ENABLE_MONITORING
             ctx->metrics.total_requests++;
 #endif
@@ -315,27 +345,30 @@ static int handle_conn(http_ctx_t *ctx, http_conn_t *c)
                 }
 
                 init_response_for_conn(c);
-                if ((ctx->routes[i].method == NULL ||
-                     strcasecmp(ctx->routes[i].method, c->req.method) == 0) &&
-                    strcmp(ctx->routes[i].pattern, c->req.uri_path) == 0) {
-                    ctx->routes[i].handler(&c->req, &c->res, ctx->routes[i].user_data);
-                    found = 1;
-                    break;
-                }
+                HTTP_DBG(ctx, "handle_conn: route matched method=%s path=%s",
+                         c->req.method, c->req.uri_path);
+                ctx->routes[i].handler(&c->req, &c->res, ctx->routes[i].user_data);
+                found = 1;
+                break;
             }
 
             if (!found) {
                 if (path_found) {
+                    HTTP_DBG(ctx, "handle_conn: method not allowed method=%s path=%s",
+                             c->req.method, c->req.uri_path);
                     if (queue_error_response(ctx, c, 405, "Method Not Allowed", "Method Not Allowed") < 0) {
                         return -1;
                     }
                 } else {
+                    HTTP_DBG(ctx, "handle_conn: route not found path=%s",
+                             c->req.uri_path ? c->req.uri_path : "<none>");
                     if (queue_error_response(ctx, c, 404, "Not Found", "Not Found") < 0) {
                         return -1;
                     }
                 }
             } else if (prepare_response(ctx, c) < 0) {
-                    return -1;
+                HTTP_ERR(ctx, "handle_conn: prepare_response failed on fd=%d", c->fd);
+                return -1;
             }
         }
     }
@@ -349,11 +382,11 @@ static int handle_conn(http_ctx_t *ctx, http_conn_t *c)
 
 http_ctx_t *http_init(const http_config_t *config)
 {
-    fprintf(stderr, "[DEBUG] http_init: Inception\n");
+    HTTP_DBG(NULL, "http_init: Inception");
 
     http_ctx_t *ctx = malloc(sizeof(*ctx));
     if (!ctx) {
-        fprintf(stderr, "[ERROR] http_init: failed to allocate http_ctx_t\n");
+        HTTP_ERR(NULL, "http_init: failed to allocate http_ctx_t");
         return NULL;
     }
     memset(ctx, 0, sizeof(*ctx));
@@ -370,9 +403,12 @@ http_ctx_t *http_init(const http_config_t *config)
     if (!ctx->config.log_fn) {
         ctx->config.log_fn = default_log;
     }
+    HTTP_DBG(ctx, "http_init: buffers recv=%zu send=%zu",
+             ctx->config.recv_buffer_size, ctx->config.send_buffer_size);
 
     ctx->routes = malloc(sizeof(route_entry_t) * INITIAL_ROUTE_CAPACITY);
     if (!ctx->routes) {
+        HTTP_ERR(ctx, "http_init: failed to allocate routes array");
         free(ctx);
         return NULL;
     }
@@ -388,6 +424,8 @@ http_ctx_t *http_init(const http_config_t *config)
         ctx->config.thread_count = 1;
     }
 #endif
+
+    HTTP_DBG(ctx, "http_init: initialization complete");
 
     return ctx;
 }
@@ -425,19 +463,23 @@ void http_free(http_ctx_t *ctx)
 int http_listen(http_ctx_t *ctx, const char *address, http_handler_fn handler, void *user_data)
 {
     if (!ctx) {
-        fprintf(stderr, "[ERROR] http_listen: ctx is NULL\n");
+        HTTP_ERR(NULL, "http_listen: ctx is NULL");
         return -1;
     }
     if (ctx->listen_count >= MAX_LISTENERS) {
+        HTTP_ERR(ctx, "http_listen: too many listeners");
         return -1;
     }
 
     const char *addr = address && *address ? address : "0.0.0.0:80";
-    int fd = create_and_bind(addr);
+    HTTP_DBG(ctx, "http_listen: address=%s", addr);
+    int fd = create_and_bind(ctx, addr);
     if (fd < 0) {
+        HTTP_ERR(ctx, "create_and_bind failed for address=%s", addr);
         return -1;
     }
     if (listen(fd, SOMAXCONN) < 0) {
+        HTTP_ERR(ctx, "listen failed on fd=%d: %s", fd, strerror(errno));
         close(fd);
         return -1;
     }
@@ -446,7 +488,9 @@ int http_listen(http_ctx_t *ctx, const char *address, http_handler_fn handler, v
     }
 
     ctx->listen_fds[ctx->listen_count++] = fd;
+    HTTP_DBG(ctx, "listener fd=%d registered", fd);
     if (http_register_route(ctx, NULL, "*", handler, user_data) < 0) {
+        HTTP_ERR(ctx, "failed to register catch-all route");
         close(fd);
         ctx->listen_count--;
         return -1;
@@ -462,6 +506,7 @@ int http_listen_https(http_ctx_t *ctx,
                       void *user_data __attribute__((unused)))
 {
     ctx->config.log_fn(HTTP_LOG_WARN, ctx->config.log_user_data, "HTTPS not implemented");
+    HTTP_ERR(ctx, "HTTPS/TLS support is not implemented");
     return -1;
 }
 #endif
@@ -469,25 +514,30 @@ int http_listen_https(http_ctx_t *ctx,
 int http_run(http_ctx_t *ctx)
 {
     ctx->stopped = 0;
+    HTTP_DBG(ctx, "http_run: enter");
     while (!ctx->stopped) {
         int timeout = compute_poll_timeout(ctx, 1000);
         int rc = http_poll(ctx, timeout);
         if (rc < 0) {
+            HTTP_ERR(ctx, "http_poll returned %d", rc);
             continue;
         }
         timers_check(ctx);
     }
+    HTTP_DBG(ctx, "http_run: exit");
     return 0;
 }
 
 void http_stop(http_ctx_t *ctx)
 {
+    HTTP_DBG(ctx, "stopping event loop");
     ctx->stopped = 1;
 }
 
 int http_poll(http_ctx_t *ctx, int timeout_ms)
 {
     int ret = -1;
+    HTTP_DBG(ctx, "timeout=%d", timeout_ms);
     size_t total_fds = ctx->listen_count;
     for (http_conn_t *c = ctx->conns; c; c = c->next) {
         total_fds++;
@@ -495,6 +545,7 @@ int http_poll(http_ctx_t *ctx, int timeout_ms)
 
     struct pollfd *pfds = malloc(sizeof(*pfds) * total_fds);
     if (!pfds) {
+        HTTP_ERR(ctx, "failed to allocate pollfd array");
         return -1;
     }
 
@@ -521,9 +572,11 @@ int http_poll(http_ctx_t *ctx, int timeout_ms)
 
     ret = poll(pfds, total_fds, timeout_ms);
     if (ret < 0) {
+        HTTP_ERR(ctx, "poll failed: %s", strerror(errno));
         free(pfds);
         return ret;
     }
+    HTTP_DBG(ctx, "ready_fds=%d", ret);
 
     idx = 0;
     for (int i = 0; i < ctx->listen_count; i++, idx++) {
@@ -539,6 +592,7 @@ int http_poll(http_ctx_t *ctx, int timeout_ms)
         http_conn_t *next = cur->next;
 
         if (re & (POLLIN | POLLOUT | POLLHUP | POLLERR)) {
+            HTTP_DBG(ctx, "fd=%d revents=0x%x", cur->fd, re);
             int rc = handle_conn(ctx, cur);
             if (rc < 0 || rc == 1) {
                 close_conn(ctx, prev, cur);
@@ -554,6 +608,7 @@ int http_poll(http_ctx_t *ctx, int timeout_ms)
     }
 
     free(pfds);
+    HTTP_DBG(ctx, "exit ret=%d", ret);
     return ret;
 }
 
@@ -565,6 +620,7 @@ int http_run_multithreaded(http_ctx_t *ctx,
 {
     ctx->config.log_fn(HTTP_LOG_WARN, ctx->config.log_user_data,
                        "Multithreading not implemented fully");
+    HTTP_ERR(ctx, "multithreading support is not implemented");
     return -1;
 }
 

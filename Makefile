@@ -2,13 +2,19 @@ CC ?= gcc
 AR ?= ar
 RM ?= rm -f
 
-BUILD_DIR := build
+DEBUG ?= 0
+
+BUILD_DIR := $(if $(filter 1,$(DEBUG)),build-debug,build)
 OBJ_DIR := $(BUILD_DIR)/obj
 BIN_DIR := $(BUILD_DIR)/bin
 LIB_DIR := $(BUILD_DIR)/lib
 
 CPPFLAGS := -Iinclude -Ilibs/http
 CFLAGS ?= -Wall -Wextra -Wpedantic -std=gnu11 -O2
+ifeq ($(DEBUG),1)
+CFLAGS := $(filter-out -O0 -O1 -O2 -O3 -Og,$(CFLAGS)) -O0 -g3
+CPPFLAGS += -DDEBUG=1
+endif
 ARFLAGS := rcs
 
 HTTP_SRCS := \
@@ -29,9 +35,11 @@ help:
 	@printf '%s\n' 'Usage:'
 	@printf '%s\n' '  make help              Show this project help'
 	@printf '%s\n' '  make                   Build the library, examples, and smoke tests'
+	@printf '%s\n' '  make DEBUG=1 <target>  Build/run the same target with DEBUG logs enabled'
 	@printf '%s\n' ''
 	@printf '%s\n' 'Build targets:'
 	@printf '%s\n' '  make lib               Build build/lib/libhttp.a'
+	@printf '%s\n' '  make DEBUG=1 lib       Build build-debug/lib/libhttp.a with -DDEBUG=1 -g3 -O0'
 	@printf '%s\n' '  make examples          Build demo/example binaries'
 	@printf '%s\n' '  make server            Build the demo HTTP server only'
 	@printf '%s\n' ''
@@ -42,8 +50,17 @@ help:
 	@printf '%s\n' '  make test              Run all test suites'
 	@printf '%s\n' '  make check             Alias for make test'
 	@printf '%s\n' ''
+	@printf '%s\n' 'Debug mode:'
+	@printf '%s\n' '  DEBUG=0 (default)      Normal optimized build in build/'
+	@printf '%s\n' '  DEBUG=1                Debug build in build-debug/ with HTTP_DBG enabled'
+	@printf '%s\n' ''
 	@printf '%s\n' 'Maintenance:'
-	@printf '%s\n' '  make clean             Remove build artifacts from build/'
+	@printf '%s\n' '  make clean             Remove build/ and build-debug/ artifacts'
+	@printf '%s\n' ''
+	@printf '%s\n' 'Examples:'
+	@printf '%s\n' '  make test'
+	@printf '%s\n' '  make DEBUG=1 test-integration'
+	@printf '%s\n' '  make DEBUG=1 server'
 	@printf '%s\n' ''
 
 
@@ -98,4 +115,4 @@ $(BIN_DIR)/http_unit: tests/unit/http_unit.c $(HTTP_SRCS) | $(BIN_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@
 
 clean:
-	$(RM) -r $(BUILD_DIR)
+	$(RM) -r build build-debug

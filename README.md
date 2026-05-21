@@ -25,6 +25,22 @@
 - `make check` — алиас для `make test`
 - `make clean` — удалить артефакты из `build/`
 
+Режимы сборки:
+
+- по умолчанию используется обычная сборка в `build/`
+- если вызвать цель как `make DEBUG=1 ...`, включается debug-сборка:
+  - артефакты идут в `build-debug/`
+  - в compilation flags добавляются `-DDEBUG=1 -O0 -g3`
+  - внутренние `HTTP_DBG(...)` сообщения библиотеки становятся активны
+
+Примеры:
+
+```bash
+make test
+make DEBUG=1 test
+make DEBUG=1 server
+```
+
 Тесты разделены по типам:
 
 - `tests/smoke/` — быстрый sanity-check сборки и основных API

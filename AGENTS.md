@@ -116,6 +116,7 @@
 - `make test` / `make check` — успешно, запускают smoke, unit и integration наборы
 - `make help` — выводит project-specific подсказку по основным целям сборки и тестов
 - `make examples` — успешно, собирает demo-сервер
+- `make DEBUG=1 <target>` — включает debug-сборку с `-DDEBUG=1 -O0 -g3` и складывает артефакты в `build-debug/`
 - после выравнивания `examples/test_server.c` примерный сервер не должен требовать `http_get_metrics`, если `HTTP_ENABLE_MONITORING` не включён
 
 Практический вывод:
@@ -125,6 +126,7 @@
 - тесты теперь разведены по типам: `tests/smoke`, `tests/unit`, `tests/integration`
 - основной агрегирующий запуск — `make test` или `make check`
 - для project-specific справки по сценариям сборки и тестов используется `make help`
+- debug и обычная сборка разведены по директориям: `build/` и `build-debug/`
 - демонстрационный сервер теперь частично согласован с дефолтной сборкой: маршрут и обработчик `/metrics` активны только при `HTTP_ENABLE_MONITORING`
 - у проекта теперь есть минимально оформленная система сборки, но пока без `CMakeLists.txt` и без отдельного install/package слоя
 
