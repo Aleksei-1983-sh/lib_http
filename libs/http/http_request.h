@@ -43,10 +43,6 @@ typedef struct http_request {
 /*  Client API                                             */
 /*─────────────────────────────────────────────────────────*/
 
-/** Perform blocking request; returns HTTP status or negative on error */
-int http_client_request_blocking(const http_request_t *req, http_response_t *out_resp);
-
-
 /** Asynchronous client request
  *  ctx: HTTP context (with event loop);
  *  url/method/headers/body as above;

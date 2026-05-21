@@ -3,16 +3,13 @@
 #define HTTP_CONFIG_H
 
 #include <stddef.h>
-#include <stdint.h>
-#include <time.h>
-
-#include "http.h"  /* Для http_ctx_t и http_metrics_callback */
-#include "log.h"   /* Для http_log_fn, если у вас отдельный лог-хедер */
-#include "metrics.h" /* Для http_metrics_callback */
+#include "log.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef struct http_metrics http_metrics_t;
 
 /** Callback для периодической отдачи метрик */
 typedef void (*http_metrics_callback)(const http_metrics_t *metrics, void *user_data);

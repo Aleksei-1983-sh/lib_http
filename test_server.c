@@ -6,6 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <time.h>
 #include <stdarg.h>
 
 #include "http.h"
@@ -156,6 +157,7 @@ void mime_handler(http_request_t *req, http_response_t *res, void *ud) {
     http_response_end(res);
 }
 
+#ifdef HTTP_ENABLE_MONITORING
 void metrics_handler(http_request_t *req, http_response_t *res, void *ud) {
     (void)req; (void)ud;
     http_metrics_t m;
@@ -180,6 +182,7 @@ void metrics_handler(http_request_t *req, http_response_t *res, void *ud) {
     }
     http_response_end(res);
 }
+#endif
 
 void timer_handler(http_request_t *req, http_response_t *res, void *ud) {
     (void)req; (void)ud;
@@ -240,7 +243,9 @@ int main(void) {
         {"GET",    "/url_utils",  utils_handler},
         {"GET",    "/json_utils", utils_handler},
         {"GET",    "/mime",       mime_handler},
+#ifdef HTTP_ENABLE_MONITORING
         {"GET",    "/metrics",    metrics_handler},
+#endif
         {"GET",    "/set_timer",  timer_handler},
     };
 

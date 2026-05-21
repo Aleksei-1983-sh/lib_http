@@ -36,11 +36,11 @@ extern "C" {
 /** Forward declarations */
 typedef struct http_ctx http_ctx_t;
 
-#include "config.h"
-#include "http_request.h"
-#include "http_response.h"
-#include "metrics.h"
 #include "log.h"
+#include "http_response.h"
+#include "http_request.h"
+#include "metrics.h"
+#include "config.h"
 
 // Максимальное число слушающих сокетов
 #ifndef MAX_LISTENERS
@@ -60,10 +60,6 @@ typedef void (*http_timer_fn)(void *user_data);
 
 /** Metrics structure (opaque fields internally) */
 typedef struct http_metrics http_metrics_t;
-
-/** Metrics callback */
-typedef void (*http_metrics_callback)(const http_metrics_t *metrics,
-                                      void *user_data);
 
 /** Self-test function prototype */
 typedef int (*http_test_fn)(void);
