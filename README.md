@@ -9,21 +9,38 @@
 
 Ниже описано, какие возможности библиотека заявляет публично, как они группируются и как этим API пользоваться.
 
+## Сборка и smoke-tests
+
+В репозитории есть базовый `Makefile` без внешних зависимостей по умолчанию.
+
+Основные команды:
+
+- `make` — собрать статическую библиотеку, demo-сервер и smoke-test
+- `make check` — собрать и запустить smoke-tests в дефолтной и feature-flag сборке
+- `make clean` — удалить артефакты из `build/`
+
+Smoke-tests проверяют:
+
+- URL/JSON/MIME utility-функции
+- базовый `http_response_*` API
+- `http_init`, `http_register_route`, `http_set_timer`, `http_listen`, `http_poll`
+- optional API под feature-флагами: metrics, self-tests, TLS stub, multithreading stub
+
 ## Что это за библиотека
 
-`libs/http` позиционируется как легковесная HTTP/HTTPS библиотека на C с event-driven моделью. В публичном API заявлены:
+`libs/http` позиционируется как легковесная HTTP-библиотека на C с event-driven моделью. В текущем рабочем контракте заявлены:
 
 - HTTP сервер
-- HTTP/HTTPS запуск через event loop
+- запуск через event loop
 - базовая маршрутизация
 - таймеры внутри event loop
 - подготовка HTTP-ответов
 - работа с HTTP-запросом в обработчике
 - utility-функции для URL, JSON и MIME
 - логирование
-- метрики
-- self-tests
-- optional multithreading
+- optional метрики
+- optional self-tests
+- optional multithreading / TLS entry points
 
 ## Версия и основные типы
 

@@ -1,21 +1,16 @@
 
 /*
- * http.h - Lightweight HTTP/HTTPS client-server library
- * Version: 1.0.0
+ * http.h - Lightweight HTTP/1.x server-oriented library
  *
- * Features:
- *  - Event-driven HTTP server and client (sync and async APIs)
- *  - Optional multithreaded server support
- *  - TLS/HTTPS support via pluggable TLS backends
- *  - Basic routing API for server
- *  - URL utilities, header manipulation
- *  - JSON integration via external parsers (e.g., jsmn)
- *  - Monitoring (metrics collection and callbacks)
- *  - Timer API in event loop
- *  - Logging abstraction
- *  - Self-test (auto-tests) hooks (enabled via HTTP_ENABLE_SELF_TESTS)
+ * Current public surface matches the parts implemented in libs/http/http.c:
+ *  - single-threaded HTTP server event loop
+ *  - basic routing
+ *  - timer callbacks
+ *  - request/response helper types
+ *  - URL / JSON / MIME utility helpers
  *
- * Configuration via http_config_t with compile-time flags to include/exclude features.
+ * Optional APIs are exposed only behind feature flags. Some of those entry
+ * points are still partial or stubbed.
  */
 #ifndef HTTP_H
 #define HTTP_H
@@ -27,13 +22,7 @@ extern "C" {
 #include <stddef.h>
 #include <sys/time.h>
 
-// If multithreading enabled, include pthreads
-#ifdef HTTP_ENABLE_MULTITHREADING
-#include <pthread.h>
-#endif
-
-/** Opaque HTTP context */
-/** Forward declarations */
+/* Forward declarations */
 typedef struct http_ctx http_ctx_t;
 
 #include "log.h"
@@ -58,7 +47,6 @@ typedef void (*http_handler_fn)(http_request_t *req,
 /** Timer callback type */
 typedef void (*http_timer_fn)(void *user_data);
 
-/** Metrics structure (opaque fields internally) */
 typedef struct http_metrics http_metrics_t;
 
 /** Self-test function prototype */
@@ -82,16 +70,15 @@ void http_free(http_ctx_t *ctx);
  */
 int http_listen(http_ctx_t *ctx, const char *address, http_handler_fn handler, void *user_data);
 
-/** Start HTTPS server (single-threaded)
- *  Requires HTTP_ENABLE_TLS.
+/** Start HTTPS server.
+ *  Declared only with `HTTP_ENABLE_TLS`.
+ *  The current implementation is still a stub and returns an error.
  */
 #ifdef HTTP_ENABLE_TLS
 int http_listen_https(http_ctx_t *ctx, const char *address, http_handler_fn handler, void *user_data);
 #endif
 
-/** Start server and run event loop (blocking until stopped)
- *  For single-threaded server: calls http_listen internally, then loops.
- */
+/** Run the event loop until `http_stop()` is called. */
 int http_run(http_ctx_t *ctx);
 
 /** Stop the running server/event loop */
@@ -103,11 +90,9 @@ void http_stop(http_ctx_t *ctx);
 int http_poll(http_ctx_t *ctx, int timeout_ms);
 
 #ifdef HTTP_ENABLE_MULTITHREADING
-/** Start multithreaded server: spawn worker threads running event loops
- *  Each thread handles a subset of connections or accepts connections via a shared listening socket.
- *  address: as in http_listen
- *  handler/user_data: as in http_listen
- *  Returns 0 on success, negative on error.
+/** Multithreaded entry points.
+ *  Declared only with `HTTP_ENABLE_MULTITHREADING`.
+ *  The current implementation is not complete.
  */
 int http_run_multithreaded(http_ctx_t *ctx, const char *address, http_handler_fn handler, void *user_data);
 
@@ -115,32 +100,24 @@ int http_run_multithreaded(http_ctx_t *ctx, const char *address, http_handler_fn
 void http_stop_multithreaded(http_ctx_t *ctx);
 #endif
 
-/** Routing API (optional): register route patterns with methods
- *  pattern: exact match or simple parameterized (e.g., "/api/item/{id}")
- *  Handler will be called if route and method match.
- *  Returns 0 on success.
+/** Register a route handler for an HTTP method and path pattern.
+ *  Matching is currently basic and implementation-defined.
  */
 int http_register_route(http_ctx_t *ctx, const char *method, const char *route_pattern, http_handler_fn handler, void *user_data);
 
-/** HTTP client APIs **/
 /** Timer API: schedule a callback after delay_ms; if interval_ms>0, repeats every interval_ms
  *  Returns timer_id >=0 on success, or negative on error.
  */
 int http_set_timer(http_ctx_t *ctx, int delay_ms, int interval_ms, http_timer_fn cb, void *user_data);
 void http_cancel_timer(http_ctx_t *ctx, int timer_id);
 
-/** Self-test / auto-tests
- * If HTTP_ENABLE_SELF_TESTS is defined, library includes built-in tests for parser, URL utils, etc.
- * User can call http_run_self_tests() to execute tests and get summary.
- */
+/** Built-in self-tests. Declared only with `HTTP_ENABLE_SELF_TESTS`. */
 #ifdef HTTP_ENABLE_SELF_TESTS
-/** Run all built-in self-tests
- * Returns 0 if all tests pass, or non-zero if any fail.
- */
+/** Run the built-in smoke-style self-tests. */
 int http_run_self_tests(void);
 
-/** Register additional test (if user wants to add custom tests)
- * Returns 0 on success.
+/** Register an additional test hook.
+ *  The current implementation is only a placeholder.
  */
 int http_register_test(const char *test_name, http_test_fn fn);
 #endif

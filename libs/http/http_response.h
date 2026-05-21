@@ -8,8 +8,8 @@ extern "C" {
 
 #include <stddef.h>
 
-/** HTTP response structure (opaque fields for internal state)
- *  User fills via provided APIs.
+/** HTTP response structure filled through the helper API below.
+ *  `internal` is managed by the library.
  */
 typedef struct http_response {
     int status_code;            /**< e.g., 200 */
@@ -21,7 +21,6 @@ typedef struct http_response {
     } *resp_headers;
     size_t num_resp_headers;
 
-    // For body: user can write via http_response_write_body; library buffers or streams
     void *internal;             /**< For internal use */
 } http_response_t;
 
@@ -44,12 +43,12 @@ void http_response_add_header(http_response_t *res,
                               const char *name,
                               const char *value);
 
-/** Write body data (can be called multiple times); if chunked enabled or content-length known,
- *  library handles accordingly.
+/** Append body data to the buffered response body.
  */
 int http_response_write_body(http_response_t *res, const void *data, size_t len);
 
-/** Signal end of response (for streaming/chunked). After this, connection may close or keep-alive.
+/** Finalize the response object for the current request.
+ *  In the current implementation this mostly validates/logs buffered state.
  */
 int http_response_end(http_response_t *res);
 

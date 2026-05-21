@@ -1158,10 +1158,6 @@ void print_request(const http_request_t *req) {
 
 // Handle one connection: read or write
 static int handle_conn(http_ctx_t *ctx, http_conn_t *c) {
-	// Приводим state к int, чтобы не было предупреждения о смене типа в ?: 
-	int state_val = c ? (int)c->state : -1;
-	int fd_val = c ? c->fd : -1;
-	HTTP_DBG(ctx, "Inception fd=%d state=%d", fd_val, state_val);
 	int ret = 0;
 
 	if (!ctx || !c) {
@@ -1169,6 +1165,8 @@ static int handle_conn(http_ctx_t *ctx, http_conn_t *c) {
 		ret = -1;
 		goto exit;
 	}
+
+	HTTP_DBG(ctx, "Inception fd=%d state=%d", c->fd, (int)c->state);
 
 	if (c->state == CONN_STATE_READING) {
 		char buf[4096];
@@ -1598,7 +1596,10 @@ int http_listen(http_ctx_t *ctx, const char *address, http_handler_fn handler, v
 }
 
 #ifdef HTTP_ENABLE_TLS
-int http_listen_https(http_ctx_t *ctx, const char *address, http_handler_fn handler, void *user_data) {
+int http_listen_https(http_ctx_t *ctx,
+                      const char *address __attribute__((unused)),
+                      http_handler_fn handler __attribute__((unused)),
+                      void *user_data __attribute__((unused))) {
     // TODO: TLS accept setup
     ctx->config.log_fn(HTTP_LOG_WARN, ctx->config.log_user_data, "HTTPS not implemented" );
     return -1;
@@ -2184,7 +2185,8 @@ int http_run_self_tests(void) {
     free(dec);
     return ok ? 0 : 1;
 }
-int http_register_test(const char *test_name, http_test_fn fn) {
+int http_register_test(const char *test_name __attribute__((unused)),
+                       http_test_fn fn __attribute__((unused))) {
     // stub: user can store tests externally
     return 0;
 }

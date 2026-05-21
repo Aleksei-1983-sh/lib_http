@@ -18,7 +18,9 @@ typedef void (*http_metrics_callback)(const http_metrics_t *metrics, void *user_
 typedef void (*http_log_fn)(http_log_level_t level, void *user_data, const char *fmt, ...);
 
 
-/** Configuration for HTTP context */
+/** Configuration for an HTTP context.
+ *  Some fields are placeholders for optional features that are not complete yet.
+ */
 typedef struct {
     // Buffer sizes
     size_t recv_buffer_size;    /**< Size of receive buffer per connection */
@@ -56,11 +58,9 @@ typedef struct {
     void (*free_fn)(void *);
 
     // Feature flags
-    int enable_compression;     /**< If non-zero, enable response compression (requires zlib) */
-    int enable_chunked;         /**< If non-zero, support chunked transfer encoding */
-    int enable_http2;           /**< Placeholder for HTTP/2 support (not implemented by default) */
-
-    // DNS resolver: blocking or async? Documented separately.
+    int enable_compression;     /**< Placeholder; full compression support is not complete */
+    int enable_chunked;         /**< Enables code paths related to chunked responses */
+    int enable_http2;           /**< Placeholder for future HTTP/2 work */
 
 } http_config_t;
 
