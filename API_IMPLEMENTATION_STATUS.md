@@ -1,6 +1,6 @@
 # API Implementation Status
 
-Короткая сверка публичного контракта `libs/http/*.h` с фактической реализацией в `libs/http/http.c`.
+Короткая сверка публичного контракта `include/http/*.h` с фактической реализацией в `libs/http/http*.c`.
 
 ```text
 +-----------------+-----------+----------------------------------------------+
@@ -17,7 +17,7 @@
 | MIME            | OK        | mime_type_from_ext                           |
 | Metrics         | FLAGGED   | only with HTTP_ENABLE_MONITORING             |
 | Self-tests      | PARTIAL   | only with HTTP_ENABLE_SELF_TESTS             |
-| Async client    | N/A       | not exported; only commented draft in c      |
+| Async client    | N/A       | не входит в активный публичный API           |
 | Request builder | N/A       | commented in header; no implementation       |
 +-----------------+-----------+----------------------------------------------+
 ```

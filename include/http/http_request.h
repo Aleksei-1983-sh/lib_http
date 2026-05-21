@@ -5,7 +5,9 @@
 extern "C" {
 #endif
 
-#include "http_response.h"
+#include <stddef.h>
+
+#include "http/http_response.h"
 
 /** HTTP request structure passed to server handlers.
  *  Fields are filled by the parser and should be treated as read-only.

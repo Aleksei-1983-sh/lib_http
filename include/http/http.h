@@ -2,7 +2,8 @@
 /*
  * http.h - Lightweight HTTP/1.x server-oriented library
  *
- * Current public surface matches the parts implemented in libs/http/http.c:
+ * Current public surface matches the parts implemented across libs/http/http.c,
+ * libs/http/http_parser.c, libs/http/http_response.c, and libs/http/http_support.c:
  *  - single-threaded HTTP server event loop
  *  - basic routing
  *  - timer callbacks
@@ -25,11 +26,11 @@ extern "C" {
 /* Forward declarations */
 typedef struct http_ctx http_ctx_t;
 
-#include "log.h"
-#include "http_response.h"
-#include "http_request.h"
-#include "metrics.h"
-#include "config.h"
+#include "http/log.h"
+#include "http/http_response.h"
+#include "http/http_request.h"
+#include "http/metrics.h"
+#include "http/config.h"
 
 // Максимальное число слушающих сокетов
 #ifndef MAX_LISTENERS

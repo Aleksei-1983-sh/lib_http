@@ -3,7 +3,7 @@
 #define HTTP_CONFIG_H
 
 #include <stddef.h>
-#include "log.h"
+#include "http/log.h"
 
 #ifdef __cplusplus
 extern "C" {

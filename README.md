@@ -1,30 +1,50 @@
 # HTTP Library (`libs/http`)
 
-Этот `README` описывает публичный API, который декларирует [libs/http/http.h](/home/di/projects_С/git_progect/libs_v0.10/libs/http/http.h:1), и связанные с ним заголовки:
+Этот `README` описывает публичный API, который декларирует [include/http/http.h](/home/di/projects_С/git_progect/libs_v0.10/include/http/http.h:1), и связанные с ним заголовки:
 
-- [libs/http/config.h](/home/di/projects_С/git_progect/libs_v0.10/libs/http/config.h:1)
-- [libs/http/http_request.h](/home/di/projects_С/git_progect/libs_v0.10/libs/http/http_request.h:1)
-- [libs/http/http_response.h](/home/di/projects_С/git_progect/libs_v0.10/libs/http/http_response.h:1)
-- [libs/http/metrics.h](/home/di/projects_С/git_progect/libs_v0.10/libs/http/metrics.h:1)
+- [include/http/config.h](/home/di/projects_С/git_progect/libs_v0.10/include/http/config.h:1)
+- [include/http/http_request.h](/home/di/projects_С/git_progect/libs_v0.10/include/http/http_request.h:1)
+- [include/http/http_response.h](/home/di/projects_С/git_progect/libs_v0.10/include/http/http_response.h:1)
+- [include/http/metrics.h](/home/di/projects_С/git_progect/libs_v0.10/include/http/metrics.h:1)
 
 Ниже описано, какие возможности библиотека заявляет публично, как они группируются и как этим API пользоваться.
 
-## Сборка и smoke-tests
+## Сборка и тесты
 
 В репозитории есть базовый `Makefile` без внешних зависимостей по умолчанию.
 
 Основные команды:
 
-- `make` — собрать статическую библиотеку, demo-сервер и smoke-test
-- `make check` — собрать и запустить smoke-tests в дефолтной и feature-flag сборке
+- `make` — собрать статическую библиотеку, примеры и smoke-тесты
+- `make lib` — собрать `build/lib/libhttp.a`
+- `make examples` — собрать demo-сервер
+- `make test-smoke` — собрать и запустить smoke-тесты в дефолтной и feature-flag сборке
+- `make test-unit` — собрать и запустить unit-тесты
+- `make test-integration` — поднять demo-сервер и проверить маршруты через `curl`
+- `make test` — прогнать все тестовые наборы
+- `make check` — алиас для `make test`
 - `make clean` — удалить артефакты из `build/`
 
-Smoke-tests проверяют:
+Тесты разделены по типам:
+
+- `tests/smoke/` — быстрый sanity-check сборки и основных API
+- `tests/unit/` — локальная корректность utility-функций и небольших API-компонентов
+- `tests/integration/` — реальные HTTP-запросы к поднятому серверу
+
+Smoke-тесты проверяют:
 
 - URL/JSON/MIME utility-функции
 - базовый `http_response_*` API
 - `http_init`, `http_register_route`, `http_set_timer`, `http_listen`, `http_poll`
 - optional API под feature-флагами: metrics, self-tests, TLS stub, multithreading stub
+
+Integration-тесты сейчас проверяют:
+
+- `GET /health`
+- `GET /echo?...`
+- `POST /echo`
+- `GET /headers`
+- `GET /set_timer?delay=...`
 
 ## Что это за библиотека
 
@@ -44,7 +64,7 @@ Smoke-tests проверяют:
 
 ## Версия и основные типы
 
-В [libs/http/http.h](/home/di/projects_С/git_progect/libs_v0.10/libs/http/http.h:1) объявлены:
+В [include/http/http.h](/home/di/projects_С/git_progect/libs_v0.10/include/http/http.h:1) объявлены:
 
 - `HTTP_LIB_VERSION`
 - `http_ctx_t` — opaque context библиотеки
@@ -76,7 +96,7 @@ void http_free(http_ctx_t *ctx);
 Минимальная заготовка:
 
 ```c
-#include "http.h"
+#include "http/http.h"
 #include <string.h>
 
 int main(void) {
@@ -102,7 +122,7 @@ int main(void) {
 
 ## 2. Конфигурация `http_config_t`
 
-В [libs/http/config.h](/home/di/projects_С/git_progect/libs_v0.10/libs/http/config.h:1) декларируются такие группы настроек:
+В [include/http/config.h](/home/di/projects_С/git_progect/libs_v0.10/include/http/config.h:1) декларируются такие группы настроек:
 
 ### Базовые параметры сервера
 
@@ -154,7 +174,7 @@ int main(void) {
 Пример конфигурации с логированием:
 
 ```c
-#include "http.h"
+#include "http/http.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -214,10 +234,10 @@ int http_poll(http_ctx_t *ctx, int timeout_ms);
 
 ### Канонический `server-first` пример
 
-Этот пример синхронизирован с [test_server.c](/home/di/projects_С/git_progect/libs_v0.10/test_server.c:1).
+Этот пример синхронизирован с [examples/test_server.c](/home/di/projects_С/git_progect/libs_v0.10/examples/test_server.c:1).
 
 ```c
-#include "http.h"
+#include "http/http.h"
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -481,11 +501,11 @@ int http_register_route(http_ctx_t *ctx,
 - регистрирует маршрут по HTTP-методу и шаблону пути
 - `method` обычно `"GET"`, `"POST"` и т.д.
 - `route_pattern` ожидается как путь вроде `"/health"` или `"/api/item/{id}"`
-- канонический пример регистрации маршрутов показан в секции выше и совпадает с `test_server.c`
+- канонический пример регистрации маршрутов показан в секции выше и совпадает с `examples/test_server.c`
 
 ## 5. Что доступно в `http_request_t`
 
-Структура запроса из [libs/http/http_request.h](/home/di/projects_С/git_progect/libs_v0.10/libs/http/http_request.h:1):
+Структура запроса из [include/http/http_request.h](/home/di/projects_С/git_progect/libs_v0.10/include/http/http_request.h:1):
 
 - `method` — метод HTTP
 - `uri_path` — путь запроса
@@ -640,7 +660,7 @@ int http_listen_https(http_ctx_t *ctx, const char *address, http_handler_fn hand
 
 ```c
 #define HTTP_ENABLE_TLS
-#include "http.h"
+#include "http/http.h"
 
 http_config_t cfg = {0};
 cfg.tls_cert_path = "server.crt";
@@ -678,7 +698,7 @@ void http_stop_multithreaded(http_ctx_t *ctx);
 
 ```c
 #define HTTP_ENABLE_MULTITHREADING
-#include "http.h"
+#include "http/http.h"
 #include <string.h>
 
 http_config_t cfg;
@@ -878,7 +898,7 @@ const char *mime3 = http_mime_type_from_ext("unknown");
 Ниже компактный пример сервера, который ближе всего к тому, как этот API предполагается использовать:
 
 ```c
-#include "http.h"
+#include "http/http.h"
 #include <string.h>
 
 static void app_handler(http_request_t *req, http_response_t *res, void *ud) {

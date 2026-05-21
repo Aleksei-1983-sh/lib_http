@@ -1,4 +1,4 @@
-#include "http.h"
+#include "http/http.h"
 
 #include <signal.h>
 #include <stdarg.h>
@@ -165,6 +165,12 @@ struct route_spec {
     http_handler_fn handler;
 };
 
+static void print_usage(const char *progname)
+{
+    fprintf(stderr, "usage: %s <host> <port>\n", progname);
+    fprintf(stderr, "example: %s 127.0.0.1 9091\n", progname);
+}
+
 static int register_routes(http_ctx_t *ctx)
 {
     static const struct route_spec routes[] = {
@@ -188,8 +194,25 @@ static int register_routes(http_ctx_t *ctx)
     return 0;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+    const char *host;
+    const char *port;
+    char listen_addr[256];
+
+    if (argc != 3) {
+        print_usage(argv[0]);
+        return 1;
+    }
+
+    host = argv[1];
+    port = argv[2];
+
+    if (snprintf(listen_addr, sizeof(listen_addr), "%s:%s", host, port) >= (int)sizeof(listen_addr)) {
+        fprintf(stderr, "listen address is too long\n");
+        return 1;
+    }
+
     signal(SIGINT, on_sigint);
 
     http_config_t cfg;
@@ -213,13 +236,13 @@ int main(void)
         return 1;
     }
 
-    if (http_listen(g_ctx, "0.0.0.0:8080", NULL, NULL) != 0) {
-        fprintf(stderr, "failed to listen on 0.0.0.0:8080\n");
+    if (http_listen(g_ctx, listen_addr, NULL, NULL) != 0) {
+        fprintf(stderr, "failed to listen on %s\n", listen_addr);
         http_free(g_ctx);
         return 1;
     }
 
-    fprintf(stderr, "listening on http://127.0.0.1:8080\n");
+    fprintf(stderr, "listening on http://%s:%s\n", host, port);
     fprintf(stderr, "routes: GET /health, GET|POST /echo, GET /headers, GET /set_timer\n");
 #ifdef HTTP_ENABLE_MONITORING
     fprintf(stderr, "routes: GET /metrics\n");
