@@ -241,6 +241,29 @@ static void print_request(const http_request_t *req)
     }
 }
 
+static void init_response_for_conn(http_conn_t *c)
+{
+    http_response_init(&c->res);
+    if (c->res.internal) {
+        http_response_internal_t *ri = (http_response_internal_t *)c->res.internal;
+        ri->conn = c;
+    }
+}
+
+static int queue_error_response(http_ctx_t *ctx, http_conn_t *c, int status, const char *reason, const char *body)
+{
+    init_response_for_conn(c);
+    c->keep_alive = 0;
+    http_response_set_status(&c->res, status, reason);
+    http_response_add_header(&c->res, "Content-Type", "text/plain");
+    if (body) {
+        if (http_response_write_body(&c->res, body, strlen(body)) < 0) {
+            return -1;
+        }
+    }
+    return prepare_response(ctx, c);
+}
+
 static int handle_conn(http_ctx_t *ctx, http_conn_t *c)
 {
     if (!ctx || !c) {
@@ -267,24 +290,34 @@ static int handle_conn(http_ctx_t *ctx, http_conn_t *c)
         }
 
         int pr = parse_request(ctx, c);
+        if (pr == HTTP_PARSE_BAD_REQUEST) {
+            return queue_error_response(ctx, c, 400, "Bad Request", "Bad Request");
+        }
         if (pr < 0) {
             return -1;
         }
-        if (pr == 1) {
+        if (pr == HTTP_PARSE_OK) {
             print_request(&c->req);
 #ifdef HTTP_ENABLE_MONITORING
             ctx->metrics.total_requests++;
 #endif
             int found = 0;
+            int path_found = 0;
             for (size_t i = 0; i < ctx->route_count; i++) {
+                if (strcmp(ctx->routes[i].pattern, c->req.uri_path) != 0) {
+                    continue;
+                }
+
+                path_found = 1;
+                if (ctx->routes[i].method != NULL &&
+                    strcasecmp(ctx->routes[i].method, c->req.method) != 0) {
+                    continue;
+                }
+
+                init_response_for_conn(c);
                 if ((ctx->routes[i].method == NULL ||
                      strcasecmp(ctx->routes[i].method, c->req.method) == 0) &&
                     strcmp(ctx->routes[i].pattern, c->req.uri_path) == 0) {
-                    http_response_init(&c->res);
-                    if (c->res.internal) {
-                        http_response_internal_t *ri = (http_response_internal_t *)c->res.internal;
-                        ri->conn = c;
-                    }
                     ctx->routes[i].handler(&c->req, &c->res, ctx->routes[i].user_data);
                     found = 1;
                     break;
@@ -292,18 +325,17 @@ static int handle_conn(http_ctx_t *ctx, http_conn_t *c)
             }
 
             if (!found) {
-                http_response_init(&c->res);
-                if (c->res.internal) {
-                    http_response_internal_t *ri = (http_response_internal_t *)c->res.internal;
-                    ri->conn = c;
+                if (path_found) {
+                    if (queue_error_response(ctx, c, 405, "Method Not Allowed", "Method Not Allowed") < 0) {
+                        return -1;
+                    }
+                } else {
+                    if (queue_error_response(ctx, c, 404, "Not Found", "Not Found") < 0) {
+                        return -1;
+                    }
                 }
-                http_response_set_status(&c->res, 404, "Not Found");
-                http_response_add_header(&c->res, "Content-Type", "text/plain");
-                http_response_write_body(&c->res, "Not Found", strlen("Not Found"));
-            }
-
-            if (prepare_response(ctx, c) < 0) {
-                return -1;
+            } else if (prepare_response(ctx, c) < 0) {
+                    return -1;
             }
         }
     }

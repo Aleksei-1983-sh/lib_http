@@ -60,6 +60,7 @@
   - сборка с `HTTP_ENABLE_TLS`
 - есть unit-тесты для utility-функций и `http_response_*`
 - есть integration-тесты, которые поднимают `examples/test_server.c` и проверяют маршруты `/health`, `/echo`, `/headers`, `/set_timer`
+- integration-тесты также закрепляют негативные сценарии `400`, `404`, `405`, malformed request и keep-alive
 - реализованы базовые части серверной модели:
   - `http_init`
   - `http_free`
@@ -70,6 +71,10 @@
   - `http_register_route`
   - `http_set_timer`
   - `http_cancel_timer`
+- базовый HTTP-контракт сервера стал строже:
+  - malformed request теперь приводит к `400 Bad Request`
+  - известный путь с неверным HTTP-методом теперь приводит к `405 Method Not Allowed`
+  - неизвестный путь по-прежнему приводит к `404 Not Found`
 - реализован буферизованный API ответа:
   - `http_response_init`
   - `http_response_set_status`
@@ -134,6 +139,14 @@
 - `GET /set_timer`
 
 Маршрут `GET /metrics` существует только при сборке с `HTTP_ENABLE_MONITORING`.
+
+Для demo-сервера и текущего server core теперь зафиксированы правила ответа:
+
+- библиотека автоматически добавляет `Content-Length`, если обработчик не передал его сам;
+- библиотека автоматически добавляет `Connection: keep-alive` или `Connection: close` по состоянию соединения;
+- неизвестный путь даёт `404 Not Found`;
+- известный путь с неверным методом даёт `405 Method Not Allowed`;
+- malformed request даёт `400 Bad Request`.
 
 `examples/test_server.c` больше не пытается демонстрировать все utility-функции и условные возможности сразу; файл сфокусирован на базовом сценарии: `http_init` -> `http_register_route` -> `http_listen` -> `http_run`.
 

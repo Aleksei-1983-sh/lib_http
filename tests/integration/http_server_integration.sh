@@ -49,7 +49,7 @@ expect_keep_alive_roundtrip() {
     grep -q "keep=alive" <<<"$output" || fail "keep-alive probe did not include second response body"
 }
 
-expect_custom_method_404() {
+expect_custom_method_405() {
     local response
     local body
     local status
@@ -58,11 +58,12 @@ expect_custom_method_404() {
     status="${response##*$'\n'}"
     body="${response%$'\n'*}"
 
-    [[ "$status" == "404" ]] || fail "custom method on /health returned status $status, expected 404"
-    grep -q "Not Found" <<<"$body" || fail "custom method on /health did not return Not Found body"
+    [[ "$status" == "405" ]] || fail "custom method on /health returned status $status, expected 405"
+    grep -q "Method Not Allowed" <<<"$body" || \
+        fail "custom method on /health did not return Method Not Allowed body"
 }
 
-expect_malformed_request_disconnect() {
+expect_malformed_request_400() {
     local output
 
     output="$(
@@ -72,7 +73,10 @@ expect_malformed_request_disconnect() {
         } | timeout 2 nc "$HOST" "$PORT" || true
     )"
 
-    [[ -z "$output" ]] || fail "malformed request unexpectedly produced a response: $output"
+    grep -q "HTTP/1.1 400 Bad Request" <<<"$output" || \
+        fail "malformed request did not return 400 Bad Request"
+    grep -q "Bad Request" <<<"$output" || \
+        fail "malformed request did not return Bad Request body"
 }
 
 trap cleanup EXIT
@@ -115,8 +119,8 @@ timer_body="$(curl -fsS "$BASE_URL/set_timer?delay=10")"
 grep -q "timer scheduled:" <<<"$timer_body" || fail "/set_timer did not confirm scheduling"
 
 expect_keep_alive_roundtrip
-expect_custom_method_404
-expect_malformed_request_disconnect
+expect_custom_method_405
+expect_malformed_request_400
 
 expect_status_and_body "404" "$BASE_URL/does-not-exist" "Not Found"
 expect_status_and_body "400" "$BASE_URL/set_timer" "usage: /set_timer?delay=1000"

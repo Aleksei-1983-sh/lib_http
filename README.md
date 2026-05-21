@@ -232,6 +232,21 @@ int http_poll(http_ctx_t *ctx, int timeout_ms);
 - `http_stop` останавливает event loop
 - `http_poll` делает одну итерацию цикла вручную
 
+### Текущие правила HTTP-ответа
+
+Для текущей реализации `libs/http` полезно считать зафиксированными такие правила ответа:
+
+- если обработчик сформировал ответ через `http_response_*`, библиотека буферизует его и сама собирает итоговый HTTP/1.1 response;
+- если пользователь явно не добавил `Content-Length`, библиотека добавляет его автоматически по размеру накопленного body;
+- библиотека всегда добавляет `Connection`:
+  - `Connection: keep-alive`, если запрос был распознан как keep-alive;
+  - `Connection: close` во всех остальных случаях;
+- body ответа отправляется как buffered payload после пустой строки `\r\n\r\n`;
+- при неизвестном пути сервер возвращает `404 Not Found`;
+- если путь существует, но метод для него не зарегистрирован, сервер возвращает `405 Method Not Allowed`;
+- malformed request сейчас приводит к `400 Bad Request`;
+- для error-ответов текущая demo/server реализация использует plain text body.
+
 ### Канонический `server-first` пример
 
 Этот пример синхронизирован с [examples/test_server.c](/home/di/projects_С/git_progect/libs_v0.10/examples/test_server.c:1).
@@ -567,6 +582,69 @@ int http_response_write_body(http_response_t *res, const void *data, size_t len)
 int http_response_end(http_response_t *res);
 void http_response_free(http_response_t *res);
 ```
+
+Практический смысл этого API в текущей реализации:
+
+- `http_response_init` сбрасывает структуру ответа и подготавливает внутренний буфер body;
+- `http_response_add_header` накапливает пользовательские заголовки;
+- `http_response_write_body` дописывает body в буферизованном режиме;
+- `http_response_end` завершает формирование объекта ответа, но не заменяет внутреннюю сборку итогового HTTP-сообщения библиотекой;
+- итоговый wire-format response библиотека собирает сама при отправке:
+  - status line;
+  - user headers;
+  - auto-generated `Content-Length`, если он не был передан вручную;
+  - `Connection`;
+  - body.
+
+Что важно учитывать:
+
+- если вручную задать `Content-Length`, библиотека не пересчитывает его поверх пользовательского значения;
+- текущее поведение ориентировано на buffered responses, а не на настоящий streaming;
+- `Transfer-Encoding: chunked` как полноценный streaming-контракт сейчас не следует считать доведённой возможностью.
+
+## 7. Поведение demo-маршрутов
+
+Текущее ожидаемое поведение канонического demo-сервера из `examples/test_server.c`:
+
+- `GET /health`
+  - статус: `200 OK`
+  - body: `OK\n`
+
+- `GET /echo?...`
+  - статус: `200 OK`
+  - body: исходная query string плюс перевод строки
+  - пример: `/echo?msg=hello&x=1` возвращает `msg=hello&x=1\n`
+
+- `POST /echo`
+  - статус: `200 OK`
+  - body: присланное тело запроса плюс перевод строки
+  - если body пустое, возвращается `(empty)\n`
+
+- `GET /headers`
+  - статус: `200 OK`
+  - body: список полученных request headers по одному на строку в формате `Name: Value\n`
+
+- `GET /set_timer?delay=<ms>`
+  - статус: `200 OK`, если `delay` распознан и больше нуля
+  - body: строка вида `timer scheduled: id=... delay_ms=...\n`
+  - статус: `400 Bad Request`, если `delay` отсутствует или невалиден
+  - body ошибки: `usage: /set_timer?delay=1000\n`
+
+- `GET /metrics`
+  - существует только при `HTTP_ENABLE_MONITORING`
+  - статус: `200 OK` при успешном получении снимка метрик
+
+- неизвестный путь
+  - статус: `404 Not Found`
+  - body: `Not Found`
+
+- известный путь с неверным методом
+  - статус: `405 Method Not Allowed`
+  - body: `Method Not Allowed`
+
+- malformed request
+  - статус: `400 Bad Request`
+  - body: `Bad Request`
 
 Типичный шаблон обработчика:
 

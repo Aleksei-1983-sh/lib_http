@@ -26,7 +26,7 @@ static int parse_request_line(http_conn_t *c, char *hdr_block)
 
     if (sscanf(hdr_block, "%15s %1023s %15s", method, uri, version) != 3) {
         HTTP_ERR(NULL, "Malformed request line");
-        return -1;
+        return HTTP_PARSE_BAD_REQUEST;
     }
 
     c->req.method = strdup(method);
@@ -51,12 +51,10 @@ static int parse_request_line(http_conn_t *c, char *hdr_block)
 
     if (strncmp(version, "HTTP/", 5) == 0) {
         if (sscanf(version + 5, "%d.%d", &c->req.http_major, &c->req.http_minor) != 2) {
-            c->req.http_major = 1;
-            c->req.http_minor = 0;
+            return HTTP_PARSE_BAD_REQUEST;
         }
     } else {
-        c->req.http_major = 1;
-        c->req.http_minor = 0;
+        return HTTP_PARSE_BAD_REQUEST;
     }
 
     return 0;
@@ -151,12 +149,16 @@ int parse_request(http_ctx_t *ctx, http_conn_t *c)
     char *hdr_block = malloc(header_len + 1);
     if (!hdr_block) {
         HTTP_ERR(ctx, "Out of memory allocating hdr_block");
-        return -1;
+        return HTTP_PARSE_ERROR;
     }
     memcpy(hdr_block, data, header_len);
     hdr_block[header_len] = '\0';
 
-    if (parse_request_line(c, hdr_block) < 0) {
+    int req_line_res = parse_request_line(c, hdr_block);
+    if (req_line_res < 0) {
+        if (req_line_res == HTTP_PARSE_BAD_REQUEST) {
+            goto err_bad_request;
+        }
         goto err_free_hdr;
     }
     if (parse_headers(ctx, c, hdr_block + strlen(hdr_block) + 2,
@@ -181,14 +183,17 @@ int parse_request(http_ctx_t *ctx, http_conn_t *c)
     }
     if (body_res == 0) {
         free(hdr_block);
-        return 0;
+        return HTTP_PARSE_INCOMPLETE;
     }
 
     c->header_parsed = 1;
     free(hdr_block);
-    return 1;
+    return HTTP_PARSE_OK;
 
+err_bad_request:
+    free(hdr_block);
+    return HTTP_PARSE_BAD_REQUEST;
 err_free_hdr:
     free(hdr_block);
-    return -1;
+    return HTTP_PARSE_ERROR;
 }

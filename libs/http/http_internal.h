@@ -151,6 +151,11 @@ int parse_request(http_ctx_t *ctx, http_conn_t *c);
 int prepare_response(http_ctx_t *ctx, http_conn_t *c);
 int send_response(http_ctx_t *ctx, http_conn_t *c);
 
+#define HTTP_PARSE_INCOMPLETE 0
+#define HTTP_PARSE_OK 1
+#define HTTP_PARSE_ERROR -1
+#define HTTP_PARSE_BAD_REQUEST -2
+
 void timers_add(http_ctx_t *ctx, http_timer_t *timer);
 void timers_remove(http_ctx_t *ctx, int timer_id);
 void timers_check(http_ctx_t *ctx);
