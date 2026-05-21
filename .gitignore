@@ -1,0 +1,35 @@
+# Object files
+*.o
+*.obj
+*.lo
+
+# Static and shared libraries
+*.a
+*.so
+*.so.*
+*.dll
+*.dylib
+
+# Executables and generic binary outputs
+*.out
+*.exe
+
+# Logs
+*.log
+logs/
+
+# Build directories
+build/
+bin/
+dist/
+tmp/
+
+# Debug / profiling artifacts
+*.dSYM/
+*.gcda
+*.gcno
+*.gcov
+core
+
+
+help/
