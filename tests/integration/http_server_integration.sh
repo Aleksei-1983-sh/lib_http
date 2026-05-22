@@ -19,6 +19,29 @@ cleanup() {
 fail() { echo "FAIL: $1" >&2; exit 1; }
 trap cleanup EXIT
 
+expect_keep_alive_roundtrip() {
+    local output
+    output="$(curl -sS -i --http1.1 -H "Connection: keep-alive" "$EXTERNAL_URL/health" "$EXTERNAL_URL/echo?keep=alive")"
+    grep -q "Connection: keep-alive" <<<"$output" || fail "keep-alive response header was not returned"
+    grep -q "OK" <<<"$output" || fail "keep-alive missing health body"
+    grep -q "keep=alive" <<<"$output" || fail "keep-alive missing second response body"
+}
+
+expect_custom_method_405() {
+    local response status body
+    response="$(curl -sS -X FROB -o - -w $'\n%{http_code}' "$EXTERNAL_URL/health")"
+    status="${response##*$'\n'}"
+    body="${response%$'\n'*}"
+    [[ "$status" == "405" ]] || fail "custom method on /health returned $status"
+    grep -q "Method Not Allowed" <<<"$body" || fail "custom method on /health missing Method Not Allowed"
+}
+
+expect_malformed_request_400() {
+    local output
+    output="$({ printf 'BROKEN REQUEST\r\n\r\n'; sleep 0.1; } | timeout 2 nc "$HOST" "$EXTERNAL_PORT" || true)"
+    grep -q "HTTP/1.1 400 Bad Request" <<<"$output" || fail "malformed request did not return 400"
+}
+
 [[ -x "$SERVER_BIN" ]] || fail "server binary not found: $SERVER_BIN"
 "$SERVER_BIN" "$HOST" "$EXTERNAL_PORT" "$INTERNAL_PORT" >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
@@ -35,26 +58,31 @@ curl -fsS "$INTERNAL_URL/health" >/dev/null || fail "internal not ready"
 
 external_role="$(curl -fsS "$EXTERNAL_URL/role")"
 internal_role="$(curl -fsS "$INTERNAL_URL/role")"
-[[ "$external_role" == $'role=external' || "$external_role" == $'role=external
-' ]] || fail "unexpected external role: $external_role"
-[[ "$internal_role" == $'role=internal' || "$internal_role" == $'role=internal
-' ]] || fail "unexpected internal role: $internal_role"
+[[ "$external_role" == $'role=external' || "$external_role" == $'role=external\n' ]] || fail "unexpected external role: $external_role"
+[[ "$internal_role" == $'role=internal' || "$internal_role" == $'role=internal\n' ]] || fail "unexpected internal role: $internal_role"
 
 echo_get="$(curl -fsS "$EXTERNAL_URL/echo?msg=hello&x=1")"
-[[ "$echo_get" == $'msg=hello&x=1' || "$echo_get" == $'msg=hello&x=1
-' ]] || fail "external echo GET mismatch"
+[[ "$echo_get" == $'msg=hello&x=1' || "$echo_get" == $'msg=hello&x=1\n' ]] || fail "external echo GET mismatch"
 
 echo_post="$(curl -fsS -X POST "$INTERNAL_URL/echo" -d "inside")"
-[[ "$echo_post" == $'inside' || "$echo_post" == $'inside
-' ]] || fail "internal echo POST mismatch"
+[[ "$echo_post" == $'inside' || "$echo_post" == $'inside\n' ]] || fail "internal echo POST mismatch"
+
+empty_post="$(curl -fsS -X POST "$EXTERNAL_URL/echo")"
+[[ "$empty_post" == $'(empty)' || "$empty_post" == $'(empty)\n' ]] || fail "empty POST echo mismatch"
+
+headers_body="$(curl -fsS -H "X-Test: 123" "$INTERNAL_URL/headers")"
+grep -q "X-Test: 123" <<<"$headers_body" || fail "/headers did not include custom header"
 
 curl -fsS "$EXTERNAL_URL/set_timer?delay=10" | grep -q "timer scheduled:" || fail "external timer not scheduled"
 curl -fsS "$INTERNAL_URL/set_timer?delay=10" | grep -q "timer scheduled:" || fail "internal timer not scheduled"
 
 status_404="$(curl -sS -o /dev/null -w '%{http_code}' "$EXTERNAL_URL/nope")"
 [[ "$status_404" == "404" ]] || fail "external 404 mismatch: $status_404"
-
 status_400="$(curl -sS -o /dev/null -w '%{http_code}' "$INTERNAL_URL/set_timer")"
 [[ "$status_400" == "400" ]] || fail "internal 400 mismatch: $status_400"
+
+expect_keep_alive_roundtrip
+expect_custom_method_405
+expect_malformed_request_400
 
 echo "integration tests passed"

@@ -76,6 +76,23 @@ static void echo_handler(http_request_t *req, http_response_t *res, void *user_d
     http_response_end(res);
 }
 
+
+static void headers_handler(http_request_t *req, http_response_t *res, void *user_data)
+{
+    (void)user_data;
+    http_response_init(res);
+    http_response_set_status(res, 200, "OK");
+    http_response_add_header(res, "Content-Type", "text/plain");
+    for (size_t i = 0; i < req->num_headers; ++i) {
+        char line[512];
+        int n = snprintf(line, sizeof(line), "%s: %s\n", req->headers[i].name, req->headers[i].value);
+        if (n > 0) {
+            http_response_write_body(res, line, (size_t)n);
+        }
+    }
+    http_response_end(res);
+}
+
 static void timer_log_cb(void *user_data)
 {
     const char *message = user_data ? (const char *)user_data : "timer fired";
@@ -139,6 +156,7 @@ static int run_server_role(const char *role, const char *host, const char *port)
         http_register_route_default("GET", "/role", role_handler, NULL) != 0 ||
         http_register_route_default("GET", "/echo", echo_handler, NULL) != 0 ||
         http_register_route_default("POST", "/echo", echo_handler, NULL) != 0 ||
+        http_register_route_default("GET", "/headers", headers_handler, NULL) != 0 ||
         http_register_route_default("GET", "/set_timer", timer_handler, NULL) != 0) {
         fprintf(stderr, "[%s] failed to register routes\n", role);
         http_free(g_ctx);
@@ -152,7 +170,7 @@ static int run_server_role(const char *role, const char *host, const char *port)
     }
 
     fprintf(stderr, "[%s] listening on http://%s:%s\n", role, host, port);
-    fprintf(stderr, "[%s] routes: GET /health, GET /role, GET|POST /echo, GET /set_timer\n", role);
+    fprintf(stderr, "[%s] routes: GET /health, GET /role, GET|POST /echo, GET /headers, GET /set_timer\n", role);
     http_run_default();
     http_free(g_ctx);
     return 0;
