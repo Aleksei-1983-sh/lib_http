@@ -4,6 +4,8 @@
 
 #include "http_internal.h"
 
+static _Thread_local http_ctx_t *tls_default_ctx = NULL;
+
 static void default_log(http_log_level_t level, void *user_data, const char *fmt, ...)
 {
     FILE *out = stderr;
@@ -378,6 +380,82 @@ static int handle_conn(http_ctx_t *ctx, http_conn_t *c)
     }
 
     return 0;
+}
+
+void http_set_default_ctx(http_ctx_t *ctx)
+{
+    tls_default_ctx = ctx;
+}
+
+http_ctx_t *http_get_default_ctx(void)
+{
+    return tls_default_ctx;
+}
+
+int http_listen_default(const char *address, http_handler_fn handler, void *user_data)
+{
+    if (!tls_default_ctx) {
+        HTTP_ERR(NULL, "http_listen_default: default ctx is NULL");
+        return -1;
+    }
+    return http_listen(tls_default_ctx, address, handler, user_data);
+}
+
+int http_run_default(void)
+{
+    if (!tls_default_ctx) {
+        HTTP_ERR(NULL, "http_run_default: default ctx is NULL");
+        return -1;
+    }
+    return http_run(tls_default_ctx);
+}
+
+void http_stop_default(void)
+{
+    if (!tls_default_ctx) {
+        HTTP_ERR(NULL, "http_stop_default: default ctx is NULL");
+        return;
+    }
+    http_stop(tls_default_ctx);
+}
+
+int http_poll_default(int timeout_ms)
+{
+    if (!tls_default_ctx) {
+        HTTP_ERR(NULL, "http_poll_default: default ctx is NULL");
+        return -1;
+    }
+    return http_poll(tls_default_ctx, timeout_ms);
+}
+
+int http_register_route_default(const char *method,
+                                const char *route_pattern,
+                                http_handler_fn handler,
+                                void *user_data)
+{
+    if (!tls_default_ctx) {
+        HTTP_ERR(NULL, "http_register_route_default: default ctx is NULL");
+        return -1;
+    }
+    return http_register_route(tls_default_ctx, method, route_pattern, handler, user_data);
+}
+
+int http_set_timer_default(int delay_ms, int interval_ms, http_timer_fn cb, void *user_data)
+{
+    if (!tls_default_ctx) {
+        HTTP_ERR(NULL, "http_set_timer_default: default ctx is NULL");
+        return -1;
+    }
+    return http_set_timer(tls_default_ctx, delay_ms, interval_ms, cb, user_data);
+}
+
+void http_cancel_timer_default(int timer_id)
+{
+    if (!tls_default_ctx) {
+        HTTP_ERR(NULL, "http_cancel_timer_default: default ctx is NULL");
+        return;
+    }
+    http_cancel_timer(tls_default_ctx, timer_id);
 }
 
 http_ctx_t *http_init(const http_config_t *config)

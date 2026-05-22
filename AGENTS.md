@@ -71,6 +71,12 @@
   - `http_register_route`
   - `http_set_timer`
   - `http_cancel_timer`
+- добавлен convenience API на thread-local default context (TLS) для сценариев, где неудобно прокидывать `http_ctx_t *` в каждый вызов:
+  - `http_set_default_ctx` / `http_get_default_ctx`
+  - `http_listen_default`
+  - `http_run_default` / `http_stop_default` / `http_poll_default`
+  - `http_register_route_default`
+  - `http_set_timer_default` / `http_cancel_timer_default`
 - базовый HTTP-контракт сервера стал строже:
   - malformed request теперь приводит к `400 Bad Request`
   - известный путь с неверным HTTP-методом теперь приводит к `405 Method Not Allowed`
@@ -88,6 +94,7 @@
 
 ## Что выглядит неполным или условным
 
+- convenience API без `ctx` опирается на thread-local default context; default context хранится в TLS на поток и должен быть установлен через `http_set_default_ctx` в каждом рабочем потоке
 - TLS/HTTPS заявлен, но текущая реализация остаётся stub/TODO в core-модуле
 - multithreading заявлен, но зависит от `HTTP_ENABLE_MULTITHREADING` и по текущему состоянию не выглядит основной рабочей веткой
 - monitoring/metrics зависят от `HTTP_ENABLE_MONITORING`
