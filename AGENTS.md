@@ -72,11 +72,13 @@
   - `http_set_timer`
   - `http_cancel_timer`
 - добавлен convenience API на thread-local default context (TLS) для сценариев, где неудобно прокидывать `http_ctx_t *` в каждый вызов:
+  - `http_init` автоматически устанавливает созданный контекст как thread-local default context текущего потока
   - `http_set_default_ctx` / `http_get_default_ctx`
   - `http_listen_default`
   - `http_run_default` / `http_stop_default` / `http_poll_default`
   - `http_register_route_default`
   - `http_set_timer_default` / `http_cancel_timer_default`
+  - `http_get_config` / `http_get_default_config`
 - базовый HTTP-контракт сервера стал строже:
   - malformed request теперь приводит к `400 Bad Request`
   - известный путь с неверным HTTP-методом теперь приводит к `405 Method Not Allowed`

@@ -253,7 +253,6 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    http_set_default_ctx(g_ctx);
 
     if (register_routes() != 0) {
         http_free(g_ctx);

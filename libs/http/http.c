@@ -458,6 +458,20 @@ void http_cancel_timer_default(int timer_id)
     http_cancel_timer(tls_default_ctx, timer_id);
 }
 
+const http_config_t *http_get_config(const http_ctx_t *ctx)
+{
+    if (!ctx) {
+        HTTP_ERR(NULL, "http_get_config: ctx is NULL");
+        return NULL;
+    }
+    return &ctx->config;
+}
+
+const http_config_t *http_get_default_config(void)
+{
+    return http_get_config(tls_default_ctx);
+}
+
 http_ctx_t *http_init(const http_config_t *config)
 {
     HTTP_DBG(NULL, "http_init: Inception");
@@ -503,7 +517,8 @@ http_ctx_t *http_init(const http_config_t *config)
     }
 #endif
 
-    HTTP_DBG(ctx, "http_init: initialization complete");
+    http_set_default_ctx(ctx);
+    HTTP_DBG(ctx, "http_init: initialization complete and set as thread-local default ctx");
 
     return ctx;
 }
