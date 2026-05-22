@@ -146,8 +146,11 @@
 - `POST /echo`
 - `GET /headers`
 - `GET /set_timer`
+- `GET /ctx`
 
 Маршрут `GET /metrics` существует только при сборке с `HTTP_ENABLE_MONITORING`.
+
+Маршрут `GET /ctx` используется для проверки, что thread-local default context установлен и совпадает с контекстом demo-сервера.
 
 Для demo-сервера и текущего server core теперь зафиксированы правила ответа:
 

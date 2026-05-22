@@ -118,6 +118,11 @@ grep -q "X-Test: 123" <<<"$headers_body" || fail "/headers did not include custo
 timer_body="$(curl -fsS "$BASE_URL/set_timer?delay=10")"
 grep -q "timer scheduled:" <<<"$timer_body" || fail "/set_timer did not confirm scheduling"
 
+
+ctx_body="$(curl -fsS "$BASE_URL/ctx")"
+[[ "$ctx_body" == $'default ctx is set' || "$ctx_body" == $'default ctx is set\n' ]] || \
+    fail "/ctx returned unexpected body: $ctx_body"
+
 expect_keep_alive_roundtrip
 expect_custom_method_405
 expect_malformed_request_400

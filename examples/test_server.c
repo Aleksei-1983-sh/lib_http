@@ -27,7 +27,7 @@ static void on_sigint(int sig)
     (void)sig;
     if (g_ctx) {
         fprintf(stderr, "stopping server\n");
-        http_stop(g_ctx);
+        http_stop_default();
     }
 }
 
@@ -90,6 +90,26 @@ static void headers_handler(http_request_t *req, http_response_t *res, void *use
     http_response_end(res);
 }
 
+
+static void default_ctx_handler(http_request_t *req, http_response_t *res, void *user_data)
+{
+    (void)req;
+    (void)user_data;
+
+    http_ctx_t *ctx = http_get_default_ctx();
+    if (!ctx) {
+        respond_text(res, 500, "Internal Server Error", "default ctx is not set\n");
+        return;
+    }
+
+    if (ctx != g_ctx) {
+        respond_text(res, 500, "Internal Server Error", "default ctx mismatch\n");
+        return;
+    }
+
+    respond_text(res, 200, "OK", "default ctx is set\n");
+}
+
 static void timer_log_cb(void *user_data)
 {
     const char *message = user_data ? (const char *)user_data : "timer fired";
@@ -106,7 +126,7 @@ static void timer_handler(http_request_t *req, http_response_t *res, void *user_
         return;
     }
 
-    int timer_id = http_set_timer(g_ctx, delay_ms, 0, timer_log_cb, "scheduled from HTTP route");
+    int timer_id = http_set_timer_default(delay_ms, 0, timer_log_cb, "scheduled from HTTP route");
     if (timer_id < 0) {
         respond_text(res, 500, "Internal Server Error", "failed to schedule timer\n");
         return;
@@ -133,7 +153,8 @@ static void metrics_handler(http_request_t *req, http_response_t *res, void *use
     (void)user_data;
 
     http_metrics_t metrics;
-    if (http_get_metrics(g_ctx, &metrics) != 0) {
+    http_ctx_t *ctx = http_get_default_ctx();
+    if (!ctx || http_get_metrics(ctx, &metrics) != 0) {
         respond_text(res, 500, "Internal Server Error", "failed to read metrics\n");
         return;
     }
@@ -171,7 +192,7 @@ static void print_usage(const char *progname)
     fprintf(stderr, "example: %s 127.0.0.1 9091\n", progname);
 }
 
-static int register_routes(http_ctx_t *ctx)
+static int register_routes(void)
 {
     static const struct route_spec routes[] = {
         {"GET",  "/health",    health_handler},
@@ -179,13 +200,14 @@ static int register_routes(http_ctx_t *ctx)
         {"POST", "/echo",      echo_handler},
         {"GET",  "/headers",   headers_handler},
         {"GET",  "/set_timer", timer_handler},
+        {"GET",  "/ctx",       default_ctx_handler},
 #ifdef HTTP_ENABLE_MONITORING
         {"GET",  "/metrics",   metrics_handler},
 #endif
     };
 
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); ++i) {
-        if (http_register_route(ctx, routes[i].method, routes[i].path, routes[i].handler, NULL) != 0) {
+        if (http_register_route_default(routes[i].method, routes[i].path, routes[i].handler, NULL) != 0) {
             fprintf(stderr, "failed to register route %s %s\n", routes[i].method, routes[i].path);
             return -1;
         }
@@ -231,24 +253,26 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (register_routes(g_ctx) != 0) {
+    http_set_default_ctx(g_ctx);
+
+    if (register_routes() != 0) {
         http_free(g_ctx);
         return 1;
     }
 
-    if (http_listen(g_ctx, listen_addr, NULL, NULL) != 0) {
+    if (http_listen_default(listen_addr, NULL, NULL) != 0) {
         fprintf(stderr, "failed to listen on %s\n", listen_addr);
         http_free(g_ctx);
         return 1;
     }
 
     fprintf(stderr, "listening on http://%s:%s\n", host, port);
-    fprintf(stderr, "routes: GET /health, GET|POST /echo, GET /headers, GET /set_timer\n");
+    fprintf(stderr, "routes: GET /health, GET|POST /echo, GET /headers, GET /set_timer, GET /ctx\n");
 #ifdef HTTP_ENABLE_MONITORING
     fprintf(stderr, "routes: GET /metrics\n");
 #endif
 
-    http_run(g_ctx);
+    http_run_default();
     http_free(g_ctx);
     return 0;
 }
