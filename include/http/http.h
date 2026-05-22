@@ -112,6 +112,27 @@ int http_register_route(http_ctx_t *ctx, const char *method, const char *route_p
 int http_set_timer(http_ctx_t *ctx, int delay_ms, int interval_ms, http_timer_fn cb, void *user_data);
 void http_cancel_timer(http_ctx_t *ctx, int timer_id);
 
+/** Set thread-local default context for convenience API. */
+void http_set_default_ctx(http_ctx_t *ctx);
+
+/** Get thread-local default context previously set via http_set_default_ctx(). */
+http_ctx_t *http_get_default_ctx(void);
+
+/** Convenience wrappers that use thread-local default context. */
+int http_listen_default(const char *address, http_handler_fn handler, void *user_data);
+int http_run_default(void);
+void http_stop_default(void);
+int http_poll_default(int timeout_ms);
+int http_register_route_default(const char *method, const char *route_pattern, http_handler_fn handler, void *user_data);
+int http_set_timer_default(int delay_ms, int interval_ms, http_timer_fn cb, void *user_data);
+void http_cancel_timer_default(int timer_id);
+
+/** Get immutable pointer to context configuration. */
+const http_config_t *http_get_config(const http_ctx_t *ctx);
+
+/** Get immutable pointer to configuration of thread-local default context. */
+const http_config_t *http_get_default_config(void);
+
 /** Built-in self-tests. Declared only with `HTTP_ENABLE_SELF_TESTS`. */
 #ifdef HTTP_ENABLE_SELF_TESTS
 /** Run the built-in smoke-style self-tests. */

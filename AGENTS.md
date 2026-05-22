@@ -71,6 +71,14 @@
   - `http_register_route`
   - `http_set_timer`
   - `http_cancel_timer`
+- добавлен convenience API на thread-local default context (TLS) для сценариев, где неудобно прокидывать `http_ctx_t *` в каждый вызов:
+  - `http_init` автоматически устанавливает созданный контекст как thread-local default context текущего потока
+  - `http_set_default_ctx` / `http_get_default_ctx`
+  - `http_listen_default`
+  - `http_run_default` / `http_stop_default` / `http_poll_default`
+  - `http_register_route_default`
+  - `http_set_timer_default` / `http_cancel_timer_default`
+  - `http_get_config` / `http_get_default_config`
 - базовый HTTP-контракт сервера стал строже:
   - malformed request теперь приводит к `400 Bad Request`
   - известный путь с неверным HTTP-методом теперь приводит к `405 Method Not Allowed`
@@ -88,6 +96,7 @@
 
 ## Что выглядит неполным или условным
 
+- convenience API без `ctx` опирается на thread-local default context; default context хранится в TLS на поток и должен быть установлен через `http_set_default_ctx` в каждом рабочем потоке
 - TLS/HTTPS заявлен, но текущая реализация остаётся stub/TODO в core-модуле
 - multithreading заявлен, но зависит от `HTTP_ENABLE_MULTITHREADING` и по текущему состоянию не выглядит основной рабочей веткой
 - monitoring/metrics зависят от `HTTP_ENABLE_MONITORING`
@@ -132,15 +141,20 @@
 
 ## Поведение примеров
 
-`examples/test_server.c` теперь выступает как канонический `server-first` пример и поднимает маршруты:
+`examples/test_server.c` теперь выступает как канонический пример supervisor-модели: один бинарь запускает два процесса сервера (external/internal) с разными конфигами и разными портами.
+
+Оба процесса поднимают маршруты:
 
 - `GET /health`
 - `GET /echo`
 - `POST /echo`
 - `GET /headers`
 - `GET /set_timer`
+- `GET /role`
 
 Маршрут `GET /metrics` существует только при сборке с `HTTP_ENABLE_MONITORING`.
+
+Маршрут `GET /role` возвращает роль процесса (`external`/`internal`) и используется integration-тестами для проверки, что подняты оба процесса с разными конфигами.
 
 Для demo-сервера и текущего server core теперь зафиксированы правила ответа:
 
@@ -152,7 +166,7 @@
 
 `examples/test_server.c` больше не пытается демонстрировать все utility-функции и условные возможности сразу; файл сфокусирован на базовом сценарии: `http_init` -> `http_register_route` -> `http_listen` -> `http_run`.
 
-`examples/test_server.c` теперь требует параметры командной строки `<host> <port>`. Если запустить сервер без них, он завершится с кратким helper/usage-сообщением и примером запуска `127.0.0.1 9091`.
+`examples/test_server.c` теперь требует параметры командной строки `<host> <external_port> <internal_port>`. Если запустить сервер без них, он завершится с кратким helper/usage-сообщением и примером запуска `127.0.0.1 19091 19092`.
 
 Канонический пример в `README.md` синхронизирован с `examples/test_server.c` и должен обновляться вместе с ним.
 
